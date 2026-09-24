@@ -4,12 +4,14 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+import { GA_MEASUREMENT_ID, trackPageView } from "../lib/analytics";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
@@ -97,6 +99,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
+    scripts: [
+      {
+        src: `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`,
+        async: true,
+      },
+      {
+        children: `
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', '${GA_MEASUREMENT_ID}');
+        `,
+      },
+    ],
   }),
 
   shellComponent: RootShell,
@@ -119,11 +135,28 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+function AnalyticsPageViews() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isFirstLoad = useRef(true);
+
+  useEffect(() => {
+    // The gtag snippet already records the initial page load.
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      return;
+    }
+    trackPageView(pathname);
+  }, [pathname]);
+
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AnalyticsPageViews />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
     </QueryClientProvider>
